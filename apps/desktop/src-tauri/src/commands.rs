@@ -5,7 +5,7 @@ use std::{
 
 use tauri::{image::Image, menu::Menu, AppHandle, Emitter, Manager, State, WebviewWindow, Wry};
 
-use crate::{constants::*, HideTaskbarWhenPinned, Pinned, TrayMenu};
+use crate::{constants::*, HideTaskbarWhenPinned, MinimizeToTray, Pinned, TrayMenu};
 
 #[tauri::command]
 pub fn open_settings(window: WebviewWindow, update: bool) {
@@ -112,6 +112,14 @@ impl Deref for TrayMenu {
 }
 
 impl Deref for HideTaskbarWhenPinned {
+  type Target = AtomicBool;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl Deref for MinimizeToTray {
   type Target = AtomicBool;
 
   fn deref(&self) -> &Self::Target {
@@ -232,6 +240,14 @@ pub fn set_hide_taskbar_when_pinned(
     pinned.load(std::sync::atomic::Ordering::Relaxed),
     hide_taskbar_when_pinned,
   );
+}
+
+#[tauri::command]
+pub fn set_minimize_to_tray(
+  minimize_to_tray: bool,
+  state: State<MinimizeToTray>,
+) {
+  state.store(minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
 }
 
 #[tauri::command]

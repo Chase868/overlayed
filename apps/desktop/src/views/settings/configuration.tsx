@@ -7,13 +7,17 @@ import { invoke } from "@tauri-apps/api/core";
 
 export const Configuration = () => {
   const { value: showOnlyTalkingUsers } = useConfigValue("showOnlyTalkingUsers");
+  const { value: showMutedUsersWhenSpeaking } = useConfigValue("showMutedUsersWhenSpeaking");
   const { value: opacity } = useConfigValue("opacity");
   const { value: opacityTarget } = useConfigValue("opacityTarget");
+  const { value: backgroundOpacity } = useConfigValue("backgroundOpacity");
+  const { value: verticalGap } = useConfigValue("verticalGap");
   const { value: vertical } = useConfigValue("vertical");
   const { value: horizontal } = useConfigValue("horizontal");
   const { value: maxUsernameLength } = useConfigValue("maxUsernameLength");
   const { value: userScale } = useConfigValue("userScale");
   const { value: hideTaskbarWhenPinned } = useConfigValue("hideTaskbarWhenPinned");
+  const { value: minimizeToTray } = useConfigValue("minimizeToTray");
 
   return (
     <div className="flex flex-col gap-2">
@@ -30,6 +34,24 @@ export const Configuration = () => {
           onCheckedChange={async () => {
             const newBool = !showOnlyTalkingUsers;
             await Config.set("showOnlyTalkingUsers", newBool);
+
+            await emit("config_update", await Config.getConfig());
+          }}
+        />
+      </div>
+      <div className="flex items-center justify-between h-8 mx-2">
+        <label
+          htmlFor="showMutedUsersWhenSpeaking"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Keep muted users visible when speaking-only is on
+        </label>
+        <Switch
+          id="showMutedUsersWhenSpeaking"
+          checked={showMutedUsersWhenSpeaking}
+          onCheckedChange={async () => {
+            const newBool = !showMutedUsersWhenSpeaking;
+            await Config.set("showMutedUsersWhenSpeaking", newBool);
 
             await emit("config_update", await Config.getConfig());
           }}
@@ -173,7 +195,7 @@ export const Configuration = () => {
           htmlFor="userScale"
           className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
         >
-          Scale
+          Overlay element size
         </label>
         <div className="flex items-center gap-4 w-1/2">
           <div className="flex-1">
@@ -196,6 +218,58 @@ export const Configuration = () => {
       </div>
       <div className="flex items-center justify-between h-8 mx-2">
         <label
+          htmlFor="backgroundOpacity"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Username box transparency
+        </label>
+        <div className="flex items-center gap-4 w-1/2">
+          <div className="flex-1">
+            <Slider
+              value={[backgroundOpacity]}
+              min={0}
+              max={100}
+              step={1}
+              onValueChange={async (val: number[]) => {
+                const newVal = val[0] ?? backgroundOpacity;
+                await Config.set("backgroundOpacity", Number(newVal));
+                await emit("config_update", await Config.getConfig());
+              }}
+            />
+          </div>
+          <div className="w-10 text-right">
+            <span className="text-sm">{backgroundOpacity} %</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between h-8 mx-2">
+        <label
+          htmlFor="verticalGap"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Vertical spacing
+        </label>
+        <div className="flex items-center gap-4 w-1/2">
+          <div className="flex-1">
+            <Slider
+              value={[verticalGap]}
+              min={-20}
+              max={40}
+              step={1}
+              onValueChange={async (val: number[]) => {
+                const newVal = val[0] ?? verticalGap;
+                await Config.set("verticalGap", Number(newVal));
+                await emit("config_update", await Config.getConfig());
+              }}
+            />
+          </div>
+          <div className="w-10 text-right">
+            <span className="text-sm">{verticalGap}px</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between h-8 mx-2">
+        <label
           htmlFor="hideTaskbar"
           className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
         >
@@ -210,6 +284,28 @@ export const Configuration = () => {
 
             await invoke("set_hide_taskbar_when_pinned", {
               hideTaskbarWhenPinned: newBool,
+            });
+
+            await emit("config_update", await Config.getConfig());
+          }}
+        />
+      </div>
+      <div className="flex items-center justify-between h-8 mx-2">
+        <label
+          htmlFor="minimizeToTray"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Minimize to system tray
+        </label>
+        <Switch
+          id="minimizeToTray"
+          checked={minimizeToTray}
+          onCheckedChange={async () => {
+            const newBool = !minimizeToTray;
+            await Config.set("minimizeToTray", newBool);
+
+            await invoke("set_minimize_to_tray", {
+              minimizeToTray: newBool,
             });
 
             await emit("config_update", await Config.getConfig());

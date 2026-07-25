@@ -41,6 +41,7 @@ use tauri::WebviewWindow;
 pub struct Pinned(AtomicBool);
 
 pub struct HideTaskbarWhenPinned(AtomicBool);
+pub struct MinimizeToTray(AtomicBool);
 
 pub struct TrayMenu(Mutex<Menu<Wry>>);
 
@@ -119,6 +120,7 @@ fn main() {
   app = app
     .manage(Pinned(AtomicBool::new(false)))
     .manage(HideTaskbarWhenPinned(AtomicBool::new(false)))
+    .manage(MinimizeToTray(AtomicBool::new(false)))
     .setup(move |app| {
       debug!("starting app...");
       let window = app.get_webview_window(MAIN_WINDOW_NAME).unwrap();
@@ -173,6 +175,7 @@ fn main() {
       close_settings,
       open_settings,
       set_hide_taskbar_when_pinned,
+      set_minimize_to_tray,
       open_config_dir,
     ]);
 
@@ -194,9 +197,18 @@ fn main() {
             }
 
             if label == MAIN_WINDOW_NAME {
-              // Save state on close
-              app.save_window_state(StateFlags::POSITION | StateFlags::SIZE);
-              std::process::exit(0);
+              let minimize_to_tray = app.state::<MinimizeToTray>().load(std::sync::atomic::Ordering::Relaxed);
+
+              if minimize_to_tray {
+                api.prevent_close();
+                if let Some(main_window) = app.get_webview_window(MAIN_WINDOW_NAME) {
+                  let _ = main_window.hide();
+                }
+              } else {
+                // Save state on close
+                app.save_window_state(StateFlags::POSITION | StateFlags::SIZE);
+                std::process::exit(0);
+              }
             } else {
               api.prevent_close();
             }

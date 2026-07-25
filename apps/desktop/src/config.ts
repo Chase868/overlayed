@@ -17,12 +17,16 @@ export interface OverlayedConfig {
   telemetry: boolean;
   joinHistoryNotifications: boolean;
   showOnlyTalkingUsers: boolean;
+  showMutedUsersWhenSpeaking: boolean;
   showOwnUser: boolean;
   opacity: number;
   opacityTarget: OpacityTarget;
+  backgroundOpacity: number;
   maxUsernameLength: number;
   userScale: number;
+  verticalGap: number;
   hideTaskbarWhenPinned: boolean;
+  minimizeToTray: boolean;
 }
 
 export type OverlayedConfigKey = keyof OverlayedConfig;
@@ -35,12 +39,16 @@ export const DEFAULT_OVERLAYED_CONFIG: OverlayedConfig = {
   telemetry: true,
   joinHistoryNotifications: false,
   showOnlyTalkingUsers: false,
+  showMutedUsersWhenSpeaking: false,
   showOwnUser: true,
   opacity: 100,
   opacityTarget: "all",
+  backgroundOpacity: 100,
   maxUsernameLength: 40,
   userScale: 100,
+  verticalGap: 8,
   hideTaskbarWhenPinned: false,
+  minimizeToTray: false,
 };
 
 const CONFIG_FILE_NAME = "config.json";

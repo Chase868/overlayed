@@ -8,18 +8,25 @@ export const ChannelView = ({ alignDirection }: { alignDirection: DirectionLR })
   const { users, me } = useAppStore();
 
   const { value: showOnlyTalkingUsers } = useConfigValue("showOnlyTalkingUsers");
+  const { value: showMutedUsersWhenSpeaking } = useConfigValue("showMutedUsersWhenSpeaking");
   const { value: showOwnUser } = useConfigValue("showOwnUser");
   const { value: opacity } = useConfigValue("opacity");
   const { value: opacityTarget } = useConfigValue("opacityTarget");
   const { value: userScale } = useConfigValue("userScale");
+  const { value: verticalGap } = useConfigValue("verticalGap");
   const { value: vertical } = useConfigValue("vertical");
 
   const allUsers = Object.entries(users);
-  let userList = showOnlyTalkingUsers ? allUsers.filter(([, item]) => item.talking) : allUsers;
+  const shouldIncludeMutedUser = (item: (typeof users)[string]) =>
+    showMutedUsersWhenSpeaking && (item.muted || item.selfMuted);
+
+  let userList = showOnlyTalkingUsers
+    ? allUsers.filter(([, item]) => item.talking || shouldIncludeMutedUser(item))
+    : allUsers;
 
   userList = userList.filter(([, item]) => {
     if (item.id === me?.id) {
-      return showOwnUser && (showOnlyTalkingUsers ? item.talking : true);
+      return showOwnUser && (showOnlyTalkingUsers ? item.talking || shouldIncludeMutedUser(item) : true);
     }
     return true;
   });
@@ -35,16 +42,18 @@ export const ChannelView = ({ alignDirection }: { alignDirection: DirectionLR })
           "overflow-auto": userScale === 100,
           "overflow-visible": userScale !== 100,
         })}
-        style={{ maxHeight: "100%" }}
+        style={{ maxHeight: "100%", gap: `${Math.max(verticalGap, 0)}px` }}
       >
-        {userList.map(([, item]) => (
+        {userList.map(([, item], index) => (
           <User
             key={item.id}
             item={item}
+            index={index}
             alignDirection={alignDirection}
             opacity={opacity}
             opacityTarget={opacityTarget}
             userScale={userScale}
+            verticalGap={verticalGap}
           />
         ))}
       </div>

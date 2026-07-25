@@ -32,6 +32,9 @@ function App() {
       await invoke("set_hide_taskbar_when_pinned", {
         hideTaskbarWhenPinned: config.hideTaskbarWhenPinned,
       });
+      await invoke("set_minimize_to_tray", {
+        minimizeToTray: config.minimizeToTray,
+      });
     })();
   }, []);
 
