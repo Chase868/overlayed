@@ -13,6 +13,7 @@ export const User = ({
   opacityTarget,
   userScale,
   verticalGap,
+  transcript,
 }: {
   item: OverlayedUser;
   index: number;
@@ -21,6 +22,7 @@ export const User = ({
   opacityTarget: OpacityTarget;
   userScale: number;
   verticalGap: number;
+  transcript?: string;
 }) => {
   const { id, selfMuted, selfDeafened, talking, muted, deafened, avatarHash } = item;
 
@@ -108,43 +110,52 @@ export const User = ({
           willChange: scaleFactor !== 1 ? "transform" : undefined,
         }}
       >
-        <div className={`pointer-events-none relative rounded-full border-2 ${talkingClass}`}>
-        <img
-          onError={e => {
-            // @ts-expect-error need to fix this prolly
-            e.target.onerror = null;
-            // @ts-expect-error need to fix this prolly
-            e.target.src = "/img/default.png";
-          }}
-          src={avatarUrl}
-          alt="avatar"
-          className="rounded-full"
-          style={{ width: avatarSize, height: avatarSize }}
-        />
+        <div className="flex flex-col items-start">
+          <div className="flex items-center">
+            <div className={`pointer-events-none relative rounded-full border-2 ${talkingClass}`}>
+              <img
+                onError={e => {
+                  // @ts-expect-error need to fix this prolly
+                  e.target.onerror = null;
+                  // @ts-expect-error need to fix this prolly
+                  e.target.src = "/img/default.png";
+                }}
+                src={avatarUrl}
+                alt="avatar"
+                className="rounded-full"
+                style={{ width: avatarSize, height: avatarSize }}
+              />
 
-        {/* This is cheese string mode */}
-        {renderCheeseMicIcon()}
-      </div>
+              {/* This is cheese string mode */}
+              {renderCheeseMicIcon()}
+            </div>
 
-        {/* This is the normal list */}
-        <div
-          className={cn(
-            "md:flex hidden pointer-events-none items-center rounded-md max-w-full",
-            mutedClass,
-            alignDirection === "center" ? "hidden md:hidden" : undefined
-          )}
-          style={{
-            backgroundColor: `rgba(40, 40, 40, ${opacityTarget === "username-box" ? backgroundOpacity / 100 : 1})`,
-            padding: "4px 8px",
-          }}
-        >
-          <span className="whitespace-nowrap" style={{ fontSize: "14px" }}>
-            {displayName}
-          </span>
-          <div className="flex">
-            {(selfMuted || muted) && <MicOff className={muted ? "fill-red-600" : "fill-current"} />}
-            {(selfDeafened || deafened) && <HeadphonesOff className={deafened ? "fill-red-600" : "fill-current"} />}
+            {/* This is the normal list */}
+            <div
+              className={cn(
+                "md:flex hidden pointer-events-none items-center rounded-md max-w-full",
+                mutedClass,
+                alignDirection === "center" ? "hidden md:hidden" : undefined
+              )}
+              style={{
+                backgroundColor: `rgba(40, 40, 40, ${opacityTarget === "username-box" ? backgroundOpacity / 100 : 1})`,
+                padding: "4px 8px",
+              }}
+            >
+              <span className="whitespace-nowrap" style={{ fontSize: "14px" }}>
+                {displayName}
+              </span>
+              <div className="flex">
+                {(selfMuted || muted) && <MicOff className={muted ? "fill-red-600" : "fill-current"} />}
+                {(selfDeafened || deafened) && <HeadphonesOff className={deafened ? "fill-red-600" : "fill-current"} />}
+              </div>
+            </div>
           </div>
+          {transcript ? (
+            <div className="ml-2 mt-1 max-w-[220px] rounded bg-black/40 px-2 py-1 text-[11px] leading-4 text-zinc-100/90">
+              {transcript}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

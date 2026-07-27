@@ -83,6 +83,16 @@ export interface OverlayedUser {
    * @property {number} lastUpdate - when we last updated the user ob
    */
   lastUpdate: number;
+
+  /**
+   * @property {string | undefined} transcript - live caption text for the user
+   */
+  transcript?: string;
+
+  /**
+   * @property {number | undefined} transcriptUpdatedAt - when the transcript was last updated
+   */
+  transcriptUpdatedAt?: number;
 }
 
 export interface CurrentChannel {

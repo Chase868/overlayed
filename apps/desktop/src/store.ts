@@ -24,6 +24,8 @@ export const createUserStateItem = (payload: VoiceStateUser) => {
     premium: payload.user.premium_type,
     discriminator: payload.user.discriminator,
     lastUpdate: 0,
+    transcript: undefined,
+    transcriptUpdatedAt: undefined,
   };
 
   return data;
@@ -49,6 +51,7 @@ export interface AppActions {
   addUser: (user: VoiceStateUser) => void;
   setCurrentChannel: (channel: CurrentChannel | null) => void;
   setMe: (user: OverlayedUser | null) => void;
+  setUserTranscript: (id: string, transcript: string, timestamp?: number) => void;
   pushError: (message: string) => void;
   resetErrors: () => void;
 }
@@ -105,6 +108,14 @@ export const useAppStore = create<AppState & AppActions>()(
     setMe: data =>
       set(state => {
         state.me = data;
+      }),
+    setUserTranscript: (id, transcript, timestamp = Date.now()) =>
+      set(state => {
+        const user = state.users[id];
+        if (user) {
+          user.transcript = transcript;
+          user.transcriptUpdatedAt = timestamp;
+        }
       }),
     setTalking: (id, talking) =>
       set(state => {

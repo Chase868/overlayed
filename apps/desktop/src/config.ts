@@ -27,6 +27,8 @@ export interface OverlayedConfig {
   verticalGap: number;
   hideTaskbarWhenPinned: boolean;
   minimizeToTray: boolean;
+  voiceToTextEnabled: boolean;
+  voiceToTextLanguage: string;
 }
 
 export type OverlayedConfigKey = keyof OverlayedConfig;
@@ -49,6 +51,8 @@ export const DEFAULT_OVERLAYED_CONFIG: OverlayedConfig = {
   verticalGap: 8,
   hideTaskbarWhenPinned: false,
   minimizeToTray: false,
+  voiceToTextEnabled: false,
+  voiceToTextLanguage: "en-US",
 };
 
 const CONFIG_FILE_NAME = "config.json";

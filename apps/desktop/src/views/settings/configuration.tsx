@@ -18,6 +18,7 @@ export const Configuration = () => {
   const { value: userScale } = useConfigValue("userScale");
   const { value: hideTaskbarWhenPinned } = useConfigValue("hideTaskbarWhenPinned");
   const { value: minimizeToTray } = useConfigValue("minimizeToTray");
+  const { value: voiceToTextEnabled } = useConfigValue("voiceToTextEnabled");
 
   return (
     <div className="flex flex-col gap-2">
@@ -267,6 +268,23 @@ export const Configuration = () => {
             <span className="text-sm">{verticalGap}px</span>
           </div>
         </div>
+      </div>
+      <div className="flex items-center justify-between h-8 mx-2">
+        <label
+          htmlFor="voiceToTextEnabled"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Show voice-to-text captions
+        </label>
+        <Switch
+          id="voiceToTextEnabled"
+          checked={voiceToTextEnabled}
+          onCheckedChange={async () => {
+            const newBool = !voiceToTextEnabled;
+            await Config.set("voiceToTextEnabled", newBool);
+            await emit("config_update", await Config.getConfig());
+          }}
+        />
       </div>
       <div className="flex items-center justify-between h-8 mx-2">
         <label

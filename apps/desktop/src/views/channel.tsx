@@ -3,9 +3,11 @@ import { User } from "../components/user";
 import { cn } from "@/utils/tw";
 import { useAppStore } from "../store";
 import { useConfigValue } from "@/hooks/use-config-value";
+import { useVoiceToText } from "@/hooks/use-voice-to-text";
+import { useEffect, useState } from "react";
 
 export const ChannelView = ({ alignDirection }: { alignDirection: DirectionLR }) => {
-  const { users, me } = useAppStore();
+  const { users, me, setUserTranscript } = useAppStore();
 
   const { value: showOnlyTalkingUsers } = useConfigValue("showOnlyTalkingUsers");
   const { value: showMutedUsersWhenSpeaking } = useConfigValue("showMutedUsersWhenSpeaking");
@@ -15,6 +17,9 @@ export const ChannelView = ({ alignDirection }: { alignDirection: DirectionLR })
   const { value: userScale } = useConfigValue("userScale");
   const { value: verticalGap } = useConfigValue("verticalGap");
   const { value: vertical } = useConfigValue("vertical");
+  const { value: voiceToTextEnabled } = useConfigValue("voiceToTextEnabled");
+  const { value: voiceToTextLanguage } = useConfigValue("voiceToTextLanguage");
+  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
 
   const allUsers = Object.entries(users);
   const shouldIncludeMutedUser = (item: (typeof users)[string]) =>
@@ -30,6 +35,20 @@ export const ChannelView = ({ alignDirection }: { alignDirection: DirectionLR })
     }
     return true;
   });
+
+  useEffect(() => {
+    const nextSpeaker = userList.find(([, item]) => item.talking && item.id !== me?.id)?.[1];
+    setActiveSpeakerId(nextSpeaker?.id ?? null);
+  }, [me?.id, userList]);
+
+  const voiceTargetId = voiceToTextEnabled && activeSpeakerId && activeSpeakerId !== me?.id ? activeSpeakerId : null;
+  const { transcript } = useVoiceToText(Boolean(voiceTargetId), voiceToTextLanguage, voiceTargetId);
+
+  useEffect(() => {
+    if (!voiceTargetId || !transcript.trim()) return;
+
+    setUserTranscript(voiceTargetId, transcript.trim());
+  }, [setUserTranscript, transcript, voiceTargetId]);
 
   return (
     <div className="h-full">
@@ -54,6 +73,7 @@ export const ChannelView = ({ alignDirection }: { alignDirection: DirectionLR })
             opacityTarget={opacityTarget}
             userScale={userScale}
             verticalGap={verticalGap}
+            transcript={item.transcript}
           />
         ))}
       </div>
