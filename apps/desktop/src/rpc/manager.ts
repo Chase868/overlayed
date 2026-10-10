@@ -9,6 +9,7 @@ import { useAppStore as appStore, createUserStateItem } from "../store";
 import type { AppActions, AppState } from "../store";
 import { useNavigate, type NavigateFunction, useLocation } from "react-router-dom";
 import { useEffect, useRef } from "react";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { RPCErrors } from "./errors";
 import { Metric, track, trackEvent } from "@/metrics";
 import { emit } from "@tauri-apps/api/event";
@@ -19,6 +20,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { hash } from "@/utils/crypto";
 import { invoke } from "@tauri-apps/api/core";
 import Config from "@/config";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
 interface TokenResponse {
   access_token: string;
@@ -111,6 +113,10 @@ class SocketManager {
   public _navigate: NavigateFunction | null = null;
   public isConnected = false;
   public version: string | undefined;
+  private reauthorizeUnlisten: UnlistenFn | null = null;
+  private notificationStatus: DiscordNotificationStatus = "connecting";
+  private notificationSubscribeTimer: ReturnType<typeof setTimeout> | null = null;
+  private reauthNotificationPending = false;
   // @ts-expect-error need better types
   public soundBoardItemsResolver = Promise.withResolvers();
 
@@ -127,7 +133,7 @@ class SocketManager {
     this.disconnect();
     void this.setNotificationStatus("connecting");
 
-    await listen(Event.ReauthorizeDiscordNotifications, () => {
+    this.reauthorizeUnlisten = await listen(Event.ReauthorizeDiscordNotifications, () => {
       this.reauthorizeDiscord();
     });
 
@@ -174,6 +180,12 @@ class SocketManager {
   public disconnect() {
     this.socket?.disconnect();
     this.isConnected = false;
+    this.reauthorizeUnlisten?.();
+    this.reauthorizeUnlisten = null;
+    if (this.notificationSubscribeTimer) {
+      clearTimeout(this.notificationSubscribeTimer);
+      this.notificationSubscribeTimer = null;
+    }
   }
 
   // we have to call the store to get the latest values
@@ -408,7 +420,7 @@ class SocketManager {
       ].includes(payload.data.code);
 
       if (shouldReauth) {
-        void this.setNotificationStatus("error", "Discord authorization expired or was revoked.");
+        void this.setNotificationStatus("reauthorize_required", "Discord authorization expired or was revoked.");
         this.userdataStore.clearAuth();
         this.store.setMe(null);
         this.store.setCurrentChannel(null);
@@ -458,6 +470,11 @@ class SocketManager {
           cmd: RPCCommand.SUBSCRIBE,
           evt: RPCEvent.NOTIFICATION_CREATE,
         });
+        this.notificationSubscribeTimer = setTimeout(() => {
+          if (this.notificationStatus === "subscribing") {
+            void this.setNotificationStatus("error", "Discord did not confirm the notification subscription.");
+          }
+        }, 8000);
       }
 
       // try to find the user
@@ -716,9 +733,51 @@ class SocketManager {
   }
 
   private async setNotificationStatus(status: DiscordNotificationStatus, detail?: string) {
+    const requiresReauthorization = status === "missing_scope" || status === "reauthorize_required";
+    const shouldNotify = requiresReauthorization && !this.reauthNotificationPending;
+    this.reauthNotificationPending = requiresReauthorization;
+    this.notificationStatus = status;
+    if (status !== "subscribing" && this.notificationSubscribeTimer) {
+      clearTimeout(this.notificationSubscribeTimer);
+      this.notificationSubscribeTimer = null;
+    }
     const state = { status, detail };
     window.localStorage.setItem("overlayed:discord-notification-status", JSON.stringify(state));
     await emit(Event.DiscordNotificationStatus, state);
+
+    try {
+      await invoke("set_discord_reauth_needed", {
+        needed: status === "missing_scope" || status === "reauthorize_required",
+      });
+    } catch (error) {
+      console.warn("Could not update the Discord tray status", error);
+    }
+
+    if (shouldNotify) {
+      await this.notifyReauthorizationRequired(detail);
+    }
+  }
+
+  private async notifyReauthorizationRequired(detail?: string) {
+    try {
+      if ((await type()) !== "windows") return;
+
+      let permissionGranted = await isPermissionGranted();
+      if (!permissionGranted) {
+        permissionGranted = (await requestPermission()) === "granted";
+      }
+
+      if (!permissionGranted) return;
+
+      await sendNotification({
+        title: "Discord authorization needed",
+        body:
+          detail ??
+          "Open Overlayed's system tray menu and choose Reauthorize Discord notifications.",
+      });
+    } catch (error) {
+      console.warn("Could not show the Discord reauthorization system notification", error);
+    }
   }
 
   private reauthorizeDiscord() {
@@ -738,7 +797,7 @@ export const useSocket = () => {
   const socketRef = useRef<SocketManager | null>(null);
 
   useEffect(() => {
-    if (location.pathname === "/settings") {
+    if (location.pathname === "/settings" || location.pathname === "/notification") {
       return;
     }
 

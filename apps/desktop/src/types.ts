@@ -172,6 +172,7 @@ export type DiscordNotificationStatus =
   | "subscribing"
   | "active"
   | "missing_scope"
+  | "reauthorize_required"
   | "error";
 
 export type ChannelType = (typeof CHANNEL_TYPES)[keyof typeof CHANNEL_TYPES];

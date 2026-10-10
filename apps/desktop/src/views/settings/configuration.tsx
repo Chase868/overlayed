@@ -22,6 +22,7 @@ const notificationStatusLabel: Record<DiscordNotificationStatus, string> = {
   subscribing: "Enabling Discord notifications",
   active: "Discord notifications are connected",
   missing_scope: "Discord notification permission is missing",
+  reauthorize_required: "Discord authorization is required",
   error: "Discord notification connection failed",
 };
 

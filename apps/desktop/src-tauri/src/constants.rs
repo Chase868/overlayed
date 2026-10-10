@@ -5,6 +5,7 @@ pub const NOTIFICATION_WINDOW_NAME: &str = "notification";
 /// for the tray events
 pub const TRAY_TOGGLE_PIN: &str = "toggle_pin";
 pub const TRAY_SHOW_APP: &str = "show_app";
+pub const TRAY_DISCORD_STATUS: &str = "discord_status";
 pub const TRAY_RELOAD: &str = "reload";
 pub const TRAY_SETTINGS: &str = "show_settings";
 pub const TRAY_OPEN_DEVTOOLS_MAIN: &str = "open_devtools_main";
@@ -15,6 +16,7 @@ pub const OVERLAYED: &str = "overlayed";
 /// random events
 pub const SHOW_UPDATE_MODAL: &str = "show_update_modal";
 pub const DISPLAY_DISCORD_NOTIFICATION: &str = "display-discord-notification";
+pub const REAUTHORIZE_DISCORD_NOTIFICATIONS: &str = "reauthorize-discord-notifications";
 
 /// window levels
 // NOTE: league sets it's window to 1000 so we go one higher

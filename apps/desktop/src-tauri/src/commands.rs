@@ -13,8 +13,38 @@ use tauri::{
 };
 
 use crate::{
-  constants::*, HideTaskbarWhenPinned, MinimizeToTray, NotificationGeneration, Pinned, TrayMenu,
+  constants::*, DiscordReauthNeeded, HideTaskbarWhenPinned, MinimizeToTray,
+  NotificationGeneration, Pinned, TrayMenu,
 };
+
+#[tauri::command]
+pub fn set_discord_reauth_needed(
+  app: AppHandle,
+  needed: bool,
+  status: State<DiscordReauthNeeded>,
+  menu: State<TrayMenu>,
+) {
+  status.0.store(needed, Ordering::Relaxed);
+
+  let (menu_text, tooltip) = if needed {
+    (
+      "Reauthorize Discord notifications",
+      "Overlayed - Discord authorization required",
+    )
+  } else {
+    ("Discord notifications: connected", "Overlayed")
+  };
+
+  if let Ok(menu) = menu.lock() {
+    if let Some(item) = menu.get(TRAY_DISCORD_STATUS) {
+      let _ = item.as_menuitem_unchecked().set_text(menu_text);
+    }
+  }
+
+  if let Some(tray) = app.tray_by_id(OVERLAYED) {
+    let _ = tray.set_tooltip(Some(tooltip));
+  }
+}
 
 #[tauri::command]
 pub fn show_discord_notification(

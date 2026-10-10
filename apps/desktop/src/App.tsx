@@ -24,13 +24,9 @@ interface DiscordNotificationPayload {
   title: string;
   body: string;
   iconUrl: string | null;
-}
-
-function truncateNotificationMessage(value: string, previewLength: number): string {
-  const normalizedLimit = Math.min(300, Math.max(1, previewLength));
-  if (value.length <= normalizedLimit) return value;
-
-  return `${value.slice(0, normalizedLimit)}...`;
+  deepLink: string;
+  webUrl: string;
+  notificationType: string;
 }
 
 function App() {
@@ -47,6 +43,8 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (location.pathname === "/notification") return;
+
     (async () => {
       const config = await Config.getConfig();
       await invoke("set_hide_taskbar_when_pinned", {
@@ -56,19 +54,21 @@ function App() {
         minimizeToTray: config.minimizeToTray,
       });
     })();
-  }, []);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (location.pathname === "/settings" || location.pathname === "/notification") return;
 
     const unlisten = listen<DiscordNotificationPayload>(Event.DiscordNotification, event => {
       const payload = event.payload;
+      const placementRoot = document.getElementById("channel-placement-root");
+      const placementRect = placementRoot?.getBoundingClientRect();
 
       void Config.getConfig().then(config =>
         invoke("show_discord_notification", {
           payload,
-          x: config.notificationOverlayX,
-          y: config.notificationOverlayY,
+          x: (placementRect?.left ?? 0) + config.notificationOverlayX,
+          y: (placementRect?.top ?? 0) + config.notificationOverlayY,
         })
       );
     });

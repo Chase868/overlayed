@@ -42,6 +42,7 @@ use system_notification::WorkspaceListener;
 use tauri::WebviewWindow;
 
 pub struct Pinned(AtomicBool);
+pub struct DiscordReauthNeeded(AtomicBool);
 pub struct NotificationGeneration(pub Arc<AtomicU64>);
 
 pub struct HideTaskbarWhenPinned(AtomicBool);
@@ -123,6 +124,7 @@ fn main() {
 
   app = app
     .manage(Pinned(AtomicBool::new(false)))
+    .manage(DiscordReauthNeeded(AtomicBool::new(false)))
     .manage(NotificationGeneration(Arc::new(AtomicU64::new(0))))
     .manage(HideTaskbarWhenPinned(AtomicBool::new(false)))
     .manage(MinimizeToTray(AtomicBool::new(false)))
@@ -169,6 +171,7 @@ fn main() {
     })
     .invoke_handler(generate_handler![
       show_discord_notification,
+      set_discord_reauth_needed,
       toggle_pin,
       get_pin,
       set_pin,

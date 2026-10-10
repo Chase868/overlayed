@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use tauri::{
   menu::{Menu, MenuBuilder, MenuEvent},
   tray::TrayIconBuilder,
-  AppHandle, LogicalSize, Manager, Wry,
+  AppHandle, Emitter, LogicalSize, Manager, Wry,
 };
 
 use anyhow::Result;
@@ -11,8 +11,9 @@ use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 use crate::{
   commands, toggle_pin, HideTaskbarWhenPinned, Pinned, TrayMenu, MAIN_WINDOW_NAME, OVERLAYED,
-  SETTINGS_WINDOW_NAME, TRAY_OPEN_DEVTOOLS_MAIN, TRAY_OPEN_DEVTOOLS_SETTINGS, TRAY_QUIT,
-  TRAY_RELOAD, TRAY_SETTINGS, TRAY_SHOW_APP, TRAY_TOGGLE_PIN,
+  SETTINGS_WINDOW_NAME, TRAY_DISCORD_STATUS, TRAY_OPEN_DEVTOOLS_MAIN,
+  TRAY_OPEN_DEVTOOLS_SETTINGS, TRAY_QUIT, TRAY_RELOAD, TRAY_SETTINGS, TRAY_SHOW_APP,
+  TRAY_TOGGLE_PIN,
 };
 
 pub struct Tray;
@@ -23,6 +24,7 @@ impl Tray {
     MenuBuilder::new(app_handle)
       .text(TRAY_TOGGLE_PIN, "Pin")
       .text(TRAY_SHOW_APP, "Show Overlayed")
+      .text(TRAY_DISCORD_STATUS, "Discord notifications: connected")
       .text(TRAY_RELOAD, "Reload App")
       .text(TRAY_OPEN_DEVTOOLS_MAIN, "Open Devtools (main window)")
       .text(
@@ -44,6 +46,9 @@ impl Tray {
       .build(app_handle)?;
     app_handle.manage(TrayMenu(Mutex::new(menu)));
     commands::update_tray_icon(app_handle, false);
+    if let Some(tray) = app_handle.tray_by_id(OVERLAYED) {
+      let _ = tray.set_tooltip(Some("Overlayed"));
+    }
     Ok(())
   }
 
@@ -68,6 +73,23 @@ impl Tray {
         window.set_size(LogicalSize::new(400, 700)).unwrap();
 
         window.set_focus().unwrap();
+      }
+      TRAY_DISCORD_STATUS => {
+        let needs_reauth = app
+          .state::<crate::DiscordReauthNeeded>()
+          .0
+          .load(std::sync::atomic::Ordering::Relaxed);
+
+        if needs_reauth {
+          if let Some(window) = app.get_webview_window(MAIN_WINDOW_NAME) {
+            let _ = window.show();
+            let _ = window.set_focus();
+          }
+          let _ = app.emit( crate::constants::REAUTHORIZE_DISCORD_NOTIFICATIONS, ());
+        } else if let Some(settings_window) = app.get_webview_window(SETTINGS_WINDOW_NAME) {
+          let _ = settings_window.show();
+          let _ = settings_window.set_focus();
+        }
       }
       TRAY_RELOAD => {
         let window = app.get_webview_window(MAIN_WINDOW_NAME).unwrap();
