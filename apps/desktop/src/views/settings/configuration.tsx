@@ -4,8 +4,31 @@ import Config from "@/config";
 import { useConfigValue } from "@/hooks/use-config-value";
 import { emit } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
+import { Event } from "@/constants";
+import type { DiscordNotificationStatus } from "@/types";
+
+interface NotificationStatus {
+  status: DiscordNotificationStatus;
+  detail?: string;
+}
+
+const INITIAL_NOTIFICATION_STATUS: NotificationStatus = { status: "connecting" };
+
+const notificationStatusLabel: Record<DiscordNotificationStatus, string> = {
+  connecting: "Connecting to Discord",
+  authorizing: "Waiting for Discord authorization",
+  subscribing: "Enabling Discord notifications",
+  active: "Discord notifications are connected",
+  missing_scope: "Discord notification permission is missing",
+  error: "Discord notification connection failed",
+};
 
 export const Configuration = () => {
+  const { value: discordMessageNotifications } = useConfigValue("discordMessageNotifications");
+  const { value: discordNotificationOpacity } = useConfigValue("discordNotificationOpacity");
+  const { value: discordMessagePreviewLength } = useConfigValue("discordMessagePreviewLength");
   const { value: showOnlyTalkingUsers } = useConfigValue("showOnlyTalkingUsers");
   const { value: showMutedUsersWhenSpeaking } = useConfigValue("showMutedUsersWhenSpeaking");
   const { value: opacity } = useConfigValue("opacity");
@@ -19,9 +42,114 @@ export const Configuration = () => {
   const { value: hideTaskbarWhenPinned } = useConfigValue("hideTaskbarWhenPinned");
   const { value: minimizeToTray } = useConfigValue("minimizeToTray");
   const { value: voiceToTextEnabled } = useConfigValue("voiceToTextEnabled");
+  const [notificationStatus, setNotificationStatus] = useState<NotificationStatus>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("overlayed:discord-notification-status") ?? "null") ?? INITIAL_NOTIFICATION_STATUS;
+    } catch {
+      return INITIAL_NOTIFICATION_STATUS;
+    }
+  });
+
+  useEffect(() => {
+    const unlisten = listen<NotificationStatus>(Event.DiscordNotificationStatus, event => {
+      setNotificationStatus(event.payload);
+    });
+
+    return () => {
+      void unlisten.then(dispose => dispose());
+    };
+  }, []);
 
   return (
     <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between mt-2 h-8 mx-2">
+        <label
+          htmlFor="discordMessageNotifications"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Show Discord message notifications
+        </label>
+        <Switch
+          id="discordMessageNotifications"
+          checked={discordMessageNotifications}
+          onCheckedChange={async () => {
+            const newBool = !discordMessageNotifications;
+            await Config.set("discordMessageNotifications", newBool);
+
+            await emit("config_update", await Config.getConfig());
+          }}
+        />
+      </div>
+      <div className="mx-2 flex items-center justify-between gap-3 py-1">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{notificationStatusLabel[notificationStatus.status]}</p>
+          {notificationStatus.detail && <p className="text-xs text-zinc-400">{notificationStatus.detail}</p>}
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded border border-zinc-600 px-2 py-1 text-xs hover:bg-zinc-800 disabled:opacity-50"
+          disabled={notificationStatus.status === "authorizing" || notificationStatus.status === "subscribing"}
+          onClick={() => emit(Event.ReauthorizeDiscordNotifications)}
+        >
+          Reauthorize
+        </button>
+      </div>
+      <p className="mx-2 text-xs text-zinc-400">
+        Unpin the overlay to enter full-screen preview mode, then drag the speaker and notification preview chips to set
+        their pinned positions.
+      </p>
+      <div className="flex items-center justify-between h-8 mx-2">
+        <label
+          htmlFor="discordNotificationOpacity"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Notification box transparency
+        </label>
+        <div className="flex items-center gap-4 w-1/2">
+          <div className="flex-1">
+            <Slider
+              value={[discordNotificationOpacity]}
+              min={0}
+              max={100}
+              step={1}
+              onValueChange={async (val: number[]) => {
+                const newVal = val[0] ?? discordNotificationOpacity;
+                await Config.set("discordNotificationOpacity", Number(newVal));
+                await emit("config_update", await Config.getConfig());
+              }}
+            />
+          </div>
+          <div className="w-10 text-right">
+            <span className="text-sm">{discordNotificationOpacity} %</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between h-8 mx-2">
+        <label
+          htmlFor="discordMessagePreviewLength"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Notification preview length
+        </label>
+        <div className="flex items-center gap-4 w-1/2">
+          <div className="flex-1">
+            <Slider
+              value={[discordMessagePreviewLength]}
+              min={20}
+              max={300}
+              step={5}
+              onValueChange={async (val: number[]) => {
+                const newVal = val[0] ?? discordMessagePreviewLength;
+                await Config.set("discordMessagePreviewLength", Number(newVal));
+                await emit("config_update", await Config.getConfig());
+              }}
+            />
+          </div>
+          <div className="w-12 text-right">
+            <span className="text-sm">{discordMessagePreviewLength}</span>
+          </div>
+        </div>
+      </div>
       <div className="flex items-center justify-between mt-2 h-8 mx-2">
         <label
           htmlFor="notification"

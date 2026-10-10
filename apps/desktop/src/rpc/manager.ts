@@ -12,11 +12,13 @@ import { useEffect, useRef } from "react";
 import { RPCErrors } from "./errors";
 import { Metric, track, trackEvent } from "@/metrics";
 import { emit } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { Event } from "@/constants";
-import type { VoiceUser } from "@/types";
+import type { DiscordNotificationStatus, VoiceUser } from "@/types";
 import { getVersion } from "@tauri-apps/api/app";
 import { hash } from "@/utils/crypto";
 import { invoke } from "@tauri-apps/api/core";
+import Config from "@/config";
 
 interface TokenResponse {
   access_token: string;
@@ -89,6 +91,15 @@ interface DiscordPayload {
   nonce?: string;
 }
 
+interface DiscordNotificationPayload {
+  title: string;
+  body: string;
+  iconUrl: string | null;
+  deepLink: string;
+  webUrl: string;
+  notificationType: string;
+}
+
 /**
  * A generic manager the socket
  */
@@ -114,6 +125,11 @@ class SocketManager {
   async init(navigate: NavigateFunction) {
     console.log("Init web socket manager");
     this.disconnect();
+    void this.setNotificationStatus("connecting");
+
+    await listen(Event.ReauthorizeDiscordNotifications, () => {
+      this.reauthorizeDiscord();
+    });
 
     this._navigate = navigate;
     this.version = await getVersion();
@@ -132,6 +148,7 @@ class SocketManager {
     } catch (e) {
       console.log(e);
       this.isConnected = false;
+      void this.setNotificationStatus("error", "Could not connect to Discord RPC.");
       this.navigate("/error");
 
       await this.unpin();
@@ -168,6 +185,7 @@ class SocketManager {
    * Authenticate with discord by having the user approve the app
    */
   private authenticate() {
+    void this.setNotificationStatus("authorizing");
     this.send({
       args: {
         client_id: APP_ID,
@@ -176,7 +194,7 @@ class SocketManager {
           "rpc",
           // TODO: when we need soundboard we can enable these scopes
           // "guilds",
-          // "rpc.notifications.read",
+          "rpc.notifications.read",
           // TODO: how do you use other scopes 🤔
           // "rpc.activities.write",
           // "rpc.voice.read",
@@ -192,6 +210,7 @@ class SocketManager {
   }
 
   private login(accessToken: string) {
+    void this.setNotificationStatus("authorizing");
     this.send({
       cmd: RPCCommand.AUTHENTICATE,
       args: { access_token: accessToken },
@@ -242,6 +261,15 @@ class SocketManager {
       }
     }
 
+    if (payload.cmd === RPCCommand.SUBSCRIBE && payload.data?.evt === RPCEvent.NOTIFICATION_CREATE) {
+      void this.setNotificationStatus("active");
+    }
+
+    if (payload.cmd === RPCCommand.SUBSCRIBE && payload.evt === RPCEvent.ERROR) {
+      const message = typeof payload.data?.message === "string" ? payload.data.message : "Discord rejected the notification subscription.";
+      void this.setNotificationStatus("error", message);
+    }
+
     if (payload.evt === RPCEvent.VOICE_STATE_DELETE) {
       // if its my user clear the channel
       if (payload.data.user.id === this.store.me?.id) {
@@ -276,6 +304,30 @@ class SocketManager {
 
     if (payload.evt === RPCEvent.VOICE_STATE_UPDATE) {
       this.store.updateUser(payload.data);
+    }
+
+    if (payload.evt === RPCEvent.NOTIFICATION_CREATE) {
+      void this.setNotificationStatus("active");
+      const notificationsEnabled = await Config.get("discordMessageNotifications");
+
+      if (notificationsEnabled) {
+        const notificationData = (payload.data ?? {}) as Record<string, unknown>;
+        const title = this.getNotificationTitle(notificationData);
+        const body = this.getNotificationBody(notificationData);
+        const iconUrl = this.getNotificationIconUrl(notificationData);
+        const deepLink = this.getNotificationDeepLink(notificationData);
+        const webUrl = this.getNotificationWebUrl(notificationData);
+        const notificationType = this.getNotificationType(notificationData);
+
+        await emit(Event.DiscordNotification, {
+          title,
+          body: body || title || "New Discord notification",
+          iconUrl,
+          deepLink,
+          webUrl,
+          notificationType,
+        } satisfies DiscordNotificationPayload);
+      }
     }
 
     if (payload.cmd === RPCCommand.GET_SOUNDBOARD_SOUNDS) {
@@ -356,6 +408,7 @@ class SocketManager {
       ].includes(payload.data.code);
 
       if (shouldReauth) {
+        void this.setNotificationStatus("error", "Discord authorization expired or was revoked.");
         this.userdataStore.clearAuth();
         this.store.setMe(null);
         this.store.setCurrentChannel(null);
@@ -366,6 +419,7 @@ class SocketManager {
       }
 
       this.store.pushError(payload.data.message);
+      void this.setNotificationStatus("error", payload.data.message);
 
       // move to the error page
       this.navigate("/error");
@@ -373,6 +427,13 @@ class SocketManager {
       // track error metric
       track(Metric.DiscordAuthed, 0);
     } else if (payload?.cmd === RPCCommand.AUTHENTICATE) {
+      const scopes = Array.isArray(payload.data?.scopes) ? payload.data.scopes : [];
+      const canReadNotifications = scopes.includes("rpc.notifications.read");
+      void this.setNotificationStatus(
+        canReadNotifications ? "subscribing" : "missing_scope",
+        canReadNotifications ? undefined : "Reauthorize Discord to grant rpc.notifications.read."
+      );
+
       // track success metric
       track(Metric.DiscordAuthed, 1);
 
@@ -391,6 +452,13 @@ class SocketManager {
         cmd: RPCCommand.SUBSCRIBE,
         evt: RPCEvent.VOICE_CHANNEL_SELECT,
       });
+
+      if (canReadNotifications) {
+        this.send({
+          cmd: RPCCommand.SUBSCRIBE,
+          evt: RPCEvent.NOTIFICATION_CREATE,
+        });
+      }
 
       // try to find the user
       this.requestUserChannel();
@@ -463,6 +531,203 @@ class SocketManager {
         evt: eventName,
       })
     );
+  }
+
+  private getNotificationTitle(data: Record<string, unknown>): string {
+    const channelName = data.channel_name;
+    if (typeof channelName === "string" && channelName.trim().length > 0) {
+      return `Discord • #${channelName}`;
+    }
+
+    const title = data.title;
+    if (typeof title === "string" && title.trim().length > 0) {
+      return `Discord • ${title}`;
+    }
+
+    return "Discord";
+  }
+
+  private getNotificationBody(data: Record<string, unknown>): string {
+    const body = data.body;
+    if (typeof body === "string" && body.trim().length > 0) {
+      return body;
+    }
+
+    const messageRecord = this.getRecord(data.message);
+    if (messageRecord) {
+      const nestedContent = this.getStringFromKeys(messageRecord, ["content", "body", "message"]);
+      if (nestedContent) {
+        return nestedContent;
+      }
+    }
+
+    const message = data.message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message;
+    }
+
+    const content = data.content;
+    if (typeof content === "string" && content.trim().length > 0) {
+      return content;
+    }
+
+    return "";
+  }
+
+  private getNotificationIconUrl(data: Record<string, unknown>): string | null {
+    const messageRecord = this.getRecord(data.message);
+    const nestedAuthor = messageRecord ? this.getRecord(messageRecord.author) : null;
+    const author = nestedAuthor ?? this.getRecord(data.author) ?? this.getRecord(data.user);
+    if (author) {
+      const authorAvatar = this.getStringFromKeys(author, ["avatar_url", "avatarUrl"]);
+      if (authorAvatar && authorAvatar.startsWith("http")) {
+        return authorAvatar;
+      }
+
+      const authorId = this.getStringFromKeys(author, ["id", "user_id", "userId"]);
+      const authorAvatarHash = this.getStringFromKeys(author, ["avatar", "avatar_hash", "avatarHash"]);
+      if (authorId && authorAvatarHash) {
+        return `https://cdn.discordapp.com/avatars/${authorId}/${authorAvatarHash}.png?size=128`;
+      }
+    }
+
+    const guild = this.getRecord(data.guild);
+    if (guild) {
+      const guildIconUrl = this.getStringFromKeys(guild, ["icon_url", "iconUrl"]);
+      if (guildIconUrl && guildIconUrl.startsWith("http")) {
+        return guildIconUrl;
+      }
+
+      const guildId = this.getStringFromKeys(guild, ["id", "guild_id", "guildId"]);
+      const guildIconHash = this.getStringFromKeys(guild, ["icon", "icon_hash", "iconHash"]);
+      if (guildId && guildIconHash) {
+        return `https://cdn.discordapp.com/icons/${guildId}/${guildIconHash}.png?size=128`;
+      }
+    }
+
+    const rootGuildId = this.getStringFromKeys(data, ["guild_id", "guildId"]);
+    const rootGuildIconHash = this.getStringFromKeys(data, ["guild_icon", "guildIcon", "icon", "icon_hash", "iconHash"]);
+    if (rootGuildId && rootGuildIconHash) {
+      return `https://cdn.discordapp.com/icons/${rootGuildId}/${rootGuildIconHash}.png?size=128`;
+    }
+
+    const directIconUrl = this.getStringFromKeys(data, ["icon_url", "iconUrl", "image_url", "imageUrl"]);
+    if (directIconUrl && directIconUrl.startsWith("http")) {
+      return directIconUrl;
+    }
+
+    return null;
+  }
+
+  private getStringFromKeys(data: Record<string, unknown>, keys: string[]): string | null {
+    for (const key of keys) {
+      const value = data[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value;
+      }
+    }
+
+    return null;
+  }
+
+  private getRecord(value: unknown): Record<string, unknown> | null {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+
+    return null;
+  }
+
+  private getNotificationDeepLink(data: Record<string, unknown>): string {
+    const url = this.getStringFromKeys(data, ["url", "deep_link", "deepLink", "link"]);
+    if (url && url.startsWith("discord://")) {
+      return url;
+    }
+
+    const notificationType = this.getNotificationType(data);
+
+    const channelId = this.getStringFromKeys(data, ["channel_id", "channelId"]);
+    const guildId = this.getStringFromKeys(data, ["guild_id", "guildId"]);
+
+    if (notificationType === "call") {
+      if (channelId && guildId) {
+        return `discord://-/channels/${guildId}/${channelId}`;
+      }
+
+      if (channelId) {
+        return `discord://-/channels/@me/${channelId}`;
+      }
+
+      return "discord://-/";
+    }
+
+    if (channelId && guildId) {
+      return `discord://-/channels/${guildId}/${channelId}`;
+    }
+
+    if (channelId) {
+      return `discord://-/channels/@me/${channelId}`;
+    }
+
+    return "discord://-/channels/@me";
+  }
+
+  private getNotificationWebUrl(data: Record<string, unknown>): string {
+    const notificationType = this.getNotificationType(data);
+    const channelId = this.getStringFromKeys(data, ["channel_id", "channelId"]);
+    const guildId = this.getStringFromKeys(data, ["guild_id", "guildId"]);
+
+    if (notificationType === "call") {
+      if (channelId && guildId) {
+        return `https://discord.com/channels/${guildId}/${channelId}`;
+      }
+
+      if (channelId) {
+        return `https://discord.com/channels/@me/${channelId}`;
+      }
+
+      return "https://discord.com/channels/@me";
+    }
+
+    if (channelId && guildId) {
+      return `https://discord.com/channels/${guildId}/${channelId}`;
+    }
+
+    if (channelId) {
+      return `https://discord.com/channels/@me/${channelId}`;
+    }
+
+    return "https://discord.com/channels/@me";
+  }
+
+  private getNotificationType(data: Record<string, unknown>): string {
+    const nestedMessage = this.getRecord(data.message);
+    const typeCandidate = this.getStringFromKeys(data, ["type", "notification_type", "notificationType"]);
+    const nestedTypeCandidate = nestedMessage
+      ? this.getStringFromKeys(nestedMessage, ["type", "notification_type", "notificationType"])
+      : null;
+
+    const normalized = (nestedTypeCandidate ?? typeCandidate ?? "message").toLowerCase();
+    if (normalized.includes("call") || normalized.includes("ring")) {
+      return "call";
+    }
+
+    return "message";
+  }
+
+  private async setNotificationStatus(status: DiscordNotificationStatus, detail?: string) {
+    const state = { status, detail };
+    window.localStorage.setItem("overlayed:discord-notification-status", JSON.stringify(state));
+    await emit(Event.DiscordNotificationStatus, state);
+  }
+
+  private reauthorizeDiscord() {
+    this.userdataStore.clearAuth();
+    this.store.setMe(null);
+    this.store.setCurrentChannel(null);
+    this.store.clearUsers();
+    this.navigate("/");
+    this.authenticate();
   }
 }
 

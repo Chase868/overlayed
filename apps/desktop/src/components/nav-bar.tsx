@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Settings,
   Pin,
+  Maximize,
   Download,
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -231,6 +232,15 @@ export const NavBar = ({
               }}
             >
               <Settings size={20} />
+            </button>
+            <button
+              className="cursor-pointer"
+              title="Maximize overlay"
+              onClick={() => {
+                invoke("maximize_overlay");
+              }}
+            >
+              <Maximize size={20} />
             </button>
           </div>
         )}

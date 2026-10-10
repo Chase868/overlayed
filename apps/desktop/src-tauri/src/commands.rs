@@ -1,11 +1,65 @@
 use std::{
   ops::Deref,
-  sync::{atomic::AtomicBool, Mutex},
+  sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+  },
+  time::Duration,
 };
 
-use tauri::{image::Image, menu::Menu, AppHandle, Emitter, Manager, State, WebviewWindow, Wry};
+use tauri::{
+  image::Image, menu::Menu, AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, State,
+  WebviewWindow, Wry,
+};
 
-use crate::{constants::*, HideTaskbarWhenPinned, MinimizeToTray, Pinned, TrayMenu};
+use crate::{
+  constants::*, HideTaskbarWhenPinned, MinimizeToTray, NotificationGeneration, Pinned, TrayMenu,
+};
+
+#[tauri::command]
+pub fn show_discord_notification(
+  app: AppHandle,
+  generation: State<NotificationGeneration>,
+  payload: serde_json::Value,
+  x: f64,
+  y: f64,
+) {
+  let Some(notification_window) = app.get_webview_window(NOTIFICATION_WINDOW_NAME) else {
+    return;
+  };
+
+  let Some(main_window) = app.get_webview_window(MAIN_WINDOW_NAME) else {
+    return;
+  };
+
+  let Ok(main_position) = main_window.outer_position() else {
+    return;
+  };
+  let scale_factor = main_window.scale_factor().unwrap_or(1.0);
+  let position = PhysicalPosition::new(
+    main_position.x + (x * scale_factor).round() as i32,
+    main_position.y + (y * scale_factor).round() as i32,
+  );
+
+  let _ = notification_window.set_size(LogicalSize::new(360.0, 112.0));
+  let _ = notification_window.set_position(position);
+  let _ = notification_window.set_ignore_cursor_events(true);
+  let _ = notification_window.set_always_on_top(true);
+  let _ = notification_window.emit(DISPLAY_DISCORD_NOTIFICATION, payload);
+  let _ = notification_window.show();
+
+  let current_generation = generation.0.fetch_add(1, Ordering::Relaxed) + 1;
+  let timeout_window = notification_window.clone();
+  let timeout_generation = app.state::<NotificationGeneration>().inner().0.clone();
+
+  tauri::async_runtime::spawn(async move {
+    tokio::time::sleep(Duration::from_millis(3200)).await;
+    if timeout_generation.load(Ordering::Relaxed) == current_generation {
+      let _ = timeout_window.hide();
+      let _ = timeout_window.set_always_on_top(false);
+    }
+  });
+}
 
 #[tauri::command]
 pub fn open_settings(window: WebviewWindow, update: bool) {
@@ -29,6 +83,13 @@ pub fn close_settings(window: WebviewWindow) {
   let settings_windows = app.get_webview_window(SETTINGS_WINDOW_NAME);
   if let Some(settings_windows) = settings_windows {
     settings_windows.hide();
+  }
+}
+
+#[tauri::command]
+pub fn maximize_overlay(window: WebviewWindow) {
+  if let Some(main_window) = window.app_handle().get_webview_window(MAIN_WINDOW_NAME) {
+    let _ = main_window.maximize();
   }
 }
 
@@ -198,6 +259,12 @@ fn _set_pin(
   });
 
   window.set_ignore_cursor_events(value);
+  #[cfg(not(target_os = "macos"))]
+  window.set_always_on_top(value).ok();
+
+  if !value {
+    let _ = window.maximize();
+  }
 
   apply_taskbar_visibility(
     &window.app_handle(),
@@ -248,6 +315,19 @@ pub fn set_minimize_to_tray(
   state: State<MinimizeToTray>,
 ) {
   state.store(minimize_to_tray, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[tauri::command]
+pub fn set_overlay_click_through(
+  window: WebviewWindow,
+  enabled: bool,
+  pinned: State<Pinned>,
+) {
+  if let Some(main_win) = window.app_handle().get_webview_window(MAIN_WINDOW_NAME) {
+    // Only allow click-through while pinned; unpinned should always be interactive.
+    let should_ignore_cursor_events = enabled && pinned.load(std::sync::atomic::Ordering::Relaxed);
+    let _ = main_win.set_ignore_cursor_events(should_ignore_cursor_events);
+  }
 }
 
 #[tauri::command]

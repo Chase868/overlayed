@@ -14,8 +14,19 @@ export interface OverlayedConfig {
   pin: boolean;
   horizontal: DirectionLR;
   vertical: DirectionTB;
+  discordNotificationHorizontal: DirectionLR;
+  discordNotificationVertical: DirectionTB;
+  discordNotificationOffsetX: number;
+  discordNotificationOffsetY: number;
+  speakerOverlayX: number;
+  speakerOverlayY: number;
+  notificationOverlayX: number;
+  notificationOverlayY: number;
+  discordNotificationOpacity: number;
+  discordMessagePreviewLength: number;
   telemetry: boolean;
   joinHistoryNotifications: boolean;
+  discordMessageNotifications: boolean;
   showOnlyTalkingUsers: boolean;
   showMutedUsersWhenSpeaking: boolean;
   showOwnUser: boolean;
@@ -38,8 +49,19 @@ export const DEFAULT_OVERLAYED_CONFIG: OverlayedConfig = {
   horizontal: "right",
   // TODO: vertical alignment? i.e., if aligned to bottom, then the navbar should be at the bottom (and corner radius changes appropriately)
   vertical: "bottom",
+  discordNotificationHorizontal: "right",
+  discordNotificationVertical: "top",
+  discordNotificationOffsetX: 0,
+  discordNotificationOffsetY: 0,
+  speakerOverlayX: 40,
+  speakerOverlayY: 120,
+  notificationOverlayX: 40,
+  notificationOverlayY: 40,
+  discordNotificationOpacity: 90,
+  discordMessagePreviewLength: 160,
   telemetry: true,
   joinHistoryNotifications: false,
+  discordMessageNotifications: false,
   showOnlyTalkingUsers: false,
   showMutedUsersWhenSpeaking: false,
   showOwnUser: true,

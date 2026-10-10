@@ -1,5 +1,6 @@
 pub const MAIN_WINDOW_NAME: &str = "main";
 pub const SETTINGS_WINDOW_NAME: &str = "settings";
+pub const NOTIFICATION_WINDOW_NAME: &str = "notification";
 
 /// for the tray events
 pub const TRAY_TOGGLE_PIN: &str = "toggle_pin";
@@ -13,6 +14,7 @@ pub const OVERLAYED: &str = "overlayed";
 
 /// random events
 pub const SHOW_UPDATE_MODAL: &str = "show_update_modal";
+pub const DISPLAY_DISCORD_NOTIFICATION: &str = "display-discord-notification";
 
 /// window levels
 // NOTE: league sets it's window to 1000 so we go one higher

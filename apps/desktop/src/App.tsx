@@ -16,10 +16,30 @@ import { useSocket } from "./rpc/manager";
 import { cn } from "./utils/tw";
 import Config from "./config";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { Event } from "./constants";
+import { NotificationOverlay } from "./views/notification-overlay";
+
+interface DiscordNotificationPayload {
+  title: string;
+  body: string;
+  iconUrl: string | null;
+}
+
+function truncateNotificationMessage(value: string, previewLength: number): string {
+  const normalizedLimit = Math.min(300, Math.max(1, previewLength));
+  if (value.length <= normalizedLimit) return value;
+
+  return `${value.slice(0, normalizedLimit)}...`;
+}
 
 function App() {
   useDisableWebFeatures();
   useSocket();
+
+  const location = useLocation();
+  const isSettingsWindow = location.pathname === "/settings";
+  const { pin } = usePin();
 
   useEffect(() => {
     const styleForLog = "font-size: 20px; color: #00dffd";
@@ -38,14 +58,35 @@ function App() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (location.pathname === "/settings" || location.pathname === "/notification") return;
+
+    const unlisten = listen<DiscordNotificationPayload>(Event.DiscordNotification, event => {
+      const payload = event.payload;
+
+      void Config.getConfig().then(config =>
+        invoke("show_discord_notification", {
+          payload,
+          x: config.notificationOverlayX,
+          y: config.notificationOverlayY,
+        })
+      );
+    });
+
+    return () => {
+      void unlisten.then(dispose => dispose());
+    };
+  }, [location.pathname]);
+
   const { update } = useUpdate();
   const { visible } = useAppStore();
 
-  const { pin } = usePin();
   const { horizontal, setHorizontalDirection } = useAlign();
   const visibleClass = visible ? "opacity-100" : "opacity-0";
-  const location = useLocation();
-  const isSettingsWindow = location.pathname === "/settings";
+
+  if (location.pathname === "/notification") {
+    return <NotificationOverlay />;
+  }
 
   return (
     <div

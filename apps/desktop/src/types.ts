@@ -166,4 +166,12 @@ export interface JoinHistoryLogUser extends OverlayedUser {
   timestamp: number;
 }
 
+export type DiscordNotificationStatus =
+  | "connecting"
+  | "authorizing"
+  | "subscribing"
+  | "active"
+  | "missing_scope"
+  | "error";
+
 export type ChannelType = (typeof CHANNEL_TYPES)[keyof typeof CHANNEL_TYPES];

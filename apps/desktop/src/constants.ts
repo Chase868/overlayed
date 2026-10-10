@@ -1,5 +1,9 @@
 export const Event = {
   UserLogUpdate: "user-log-update",
+  DiscordNotification: "discord-notification",
+  DiscordNotificationStatus: "discord-notification-status",
+  ReauthorizeDiscordNotifications: "reauthorize-discord-notifications",
+  DisplayDiscordNotification: "display-discord-notification",
 } as const;
 
 /**

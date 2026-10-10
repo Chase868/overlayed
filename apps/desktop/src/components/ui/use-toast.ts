@@ -4,7 +4,7 @@ import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_REMOVE_DELAY = 1000;
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -137,6 +137,7 @@ type Toast = Omit<ToasterToast, "id">;
 
 function toast({ ...props }: Toast) {
   const id = genId();
+  const durationMs = typeof props.duration === "number" ? props.duration : 5000;
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -156,6 +157,11 @@ function toast({ ...props }: Toast) {
       },
     },
   });
+
+  // Fallback auto-dismiss to avoid sticky toasts if the underlying timer doesn't fire.
+  setTimeout(() => {
+    dismiss();
+  }, durationMs);
 
   return {
     id: id,

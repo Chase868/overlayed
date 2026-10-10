@@ -18,7 +18,10 @@ use constants::*;
 use log::{debug, info};
 use std::{
   str::FromStr,
-  sync::{atomic::AtomicBool, Mutex},
+  sync::{
+    atomic::{AtomicBool, AtomicU64},
+    Arc, Mutex,
+  },
 };
 use tauri::{generate_handler, menu::Menu, LogicalSize, Manager, Wry};
 use tauri_plugin_log::{Target, TargetKind};
@@ -39,6 +42,7 @@ use system_notification::WorkspaceListener;
 use tauri::WebviewWindow;
 
 pub struct Pinned(AtomicBool);
+pub struct NotificationGeneration(pub Arc<AtomicU64>);
 
 pub struct HideTaskbarWhenPinned(AtomicBool);
 pub struct MinimizeToTray(AtomicBool);
@@ -119,6 +123,7 @@ fn main() {
 
   app = app
     .manage(Pinned(AtomicBool::new(false)))
+    .manage(NotificationGeneration(Arc::new(AtomicU64::new(0))))
     .manage(HideTaskbarWhenPinned(AtomicBool::new(false)))
     .manage(MinimizeToTray(AtomicBool::new(false)))
     .setup(move |app| {
@@ -127,10 +132,6 @@ fn main() {
       let settings = app.get_webview_window(SETTINGS_WINDOW_NAME).unwrap();
 
       info!("Log level set to: {log_level}");
-      // the window should always be on top
-      #[cfg(not(target_os = "macos"))]
-      window.set_always_on_top(true);
-
       // set the document title for the main window
       // TODO: we could just get the tauri window title in js as an alternative?
       window.set_document_title("Overlayed - Main");
@@ -142,6 +143,7 @@ fn main() {
       // NOTE: this might be a bug?
       window.set_decorations(false);
       window.set_shadow(false);
+      window.maximize();
 
       // add mac things
       #[cfg(target_os = "macos")]
@@ -166,6 +168,7 @@ fn main() {
       Ok(())
     })
     .invoke_handler(generate_handler![
+      show_discord_notification,
       toggle_pin,
       get_pin,
       set_pin,
@@ -174,8 +177,10 @@ fn main() {
       simulate_error_screen,
       close_settings,
       open_settings,
+      maximize_overlay,
       set_hide_taskbar_when_pinned,
       set_minimize_to_tray,
+      set_overlay_click_through,
       open_config_dir,
     ]);
 

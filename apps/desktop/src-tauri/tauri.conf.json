@@ -58,6 +58,21 @@
         "title": "Overlayed - Settings",
         "width": 600,
         "height": 480
+      },
+      {
+        "transparent": true,
+        "decorations": false,
+        "resizable": false,
+        "minimizable": false,
+        "visible": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "focus": false,
+        "label": "notification",
+        "url": "#notification",
+        "title": "Overlayed Notification",
+        "width": 360,
+        "height": 112
       }
     ],
     "withGlobalTauri": true,

@@ -2,11 +2,13 @@
   "identifier": "desktop-capability",
   "windows": [
     "main",
-    "settings"
+    "settings",
+    "notification"
   ],
   "webviews": [
     "main",
-    "settings"
+    "settings",
+    "notification"
   ],
   "platforms": [
     "macOS",
